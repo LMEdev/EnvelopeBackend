@@ -16,6 +16,7 @@ import java.util.List;
 @Tag(name = "Games", description = "API для создания, подключения и списка игровых комнат")
 @RestController
 @RequestMapping("/games")
+@CrossOrigin(origins="*")
 public class GameController {
     private final RoomManagerService manager;
 
