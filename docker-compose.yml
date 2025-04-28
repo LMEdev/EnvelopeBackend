@@ -11,7 +11,7 @@ services:
       dockerfile: Dockerfile
     container_name: game-backend
     ports:
-      - "8080:8080"
+      - "6952:6952"
     environment:
       - SPRING_REDIS_HOST=redis
       - SPRING_REDIS_PORT=6379

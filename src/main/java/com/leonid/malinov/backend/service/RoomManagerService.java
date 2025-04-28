@@ -22,11 +22,11 @@ import java.util.stream.Collectors;
 public class RoomManagerService {
     private final Map<String, Room> rooms = new ConcurrentHashMap<>();
     private final RoomCacheService cache;
-    private final GptService gptService;
+    private final OpenRouterGptService openRouterGptService;
 
-    public RoomManagerService(RoomCacheService cache, GptService gptService) {
+    public RoomManagerService(RoomCacheService cache, OpenRouterGptService openRouterGptService) {
         this.cache = cache;
-        this.gptService = gptService;
+        this.openRouterGptService = openRouterGptService;
     }
 
     public CreateGameResult createGame(String nick, int capacity) {
@@ -72,7 +72,7 @@ public class RoomManagerService {
         for (var player : room.getPlayers()) {
             String uid = player.getId();
             String ua = room.getAnswers().getOrDefault(uid, "");
-            PlayerRoundResult res = gptService.evaluate(prompt, ua, player.getName());
+            PlayerRoundResult res = openRouterGptService.evaluate(prompt, ua);
             room.saveRoundResult(uid, res);
         }
 
@@ -125,13 +125,6 @@ public class RoomManagerService {
         cache.save(room);
     }
 
-    public boolean isAdmin(String roomId, String userId) {
-        Room room = Optional.ofNullable(rooms.get(roomId))
-                .orElseThrow(() -> new NoSuchElementException("Комната не найдена"));
-        return room.getPlayers().stream()
-                .anyMatch(p -> p.getId().equals(userId) && p.isAdmin());
-    }
-
     public List<RoomCache> getAllOpenedGames() {
         return cache.findAllOpened();
     }
@@ -157,17 +150,9 @@ public class RoomManagerService {
                 .orElseThrow(() -> new NoSuchElementException("Комната не найдена: " + roomId));
 
         room.rotateAdmin();
-        room.setCurrentPrompt("");                       // сброс prompt, answers, roundResults
+        room.setCurrentPrompt("");
         room.setStatus(RoomStatus.MAIN_PLAYER_THINKING);
         cache.save(room);
-    }
-
-    public List<Answer> getAnswers(String roomId) {
-        Room room = Optional.ofNullable(rooms.get(roomId))
-                .orElseThrow(() -> new NoSuchElementException("Комната не найдена"));
-        return room.getAnswers().entrySet().stream()
-                .map(e -> new Answer(e.getKey(), e.getValue()))
-                .collect(Collectors.toList());
     }
 }
 
