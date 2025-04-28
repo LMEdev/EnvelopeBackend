@@ -3,3 +3,5 @@ roomId= \
 &userId= "
 
 docker-compose up --build
+
+![alt text](https://i.imgur.com/UoYSQZX.jpeg)
