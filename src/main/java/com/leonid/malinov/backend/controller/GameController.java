@@ -6,8 +6,10 @@ import com.leonid.malinov.backend.dto.result.CreateGameResult;
 import com.leonid.malinov.backend.dto.room.RoomCache;
 import com.leonid.malinov.backend.dto.room.RoomInfo;
 import com.leonid.malinov.backend.dto.room.RoomSummary;
+import com.leonid.malinov.backend.service.RoomEventBroadcaster;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import com.leonid.malinov.backend.service.RoomManagerService;
@@ -23,10 +25,14 @@ import java.util.stream.Collectors;
 @RequestMapping("/games")
 @CrossOrigin(origins="*")
 public class GameController {
-    private final RoomManagerService manager;
 
-    public GameController(RoomManagerService manager) {
-        this.manager = manager;
+    private final RoomManagerService manager;
+    private final RoomEventBroadcaster broadcaster;
+
+    public GameController(RoomManagerService manager,
+                          RoomEventBroadcaster broadcaster) {
+        this.manager     = manager;
+        this.broadcaster = broadcaster;
     }
 
     @Operation(summary = "Создать новую игру (комнату)")
@@ -71,8 +77,11 @@ public class GameController {
 
     @Operation(summary = "Исключить пользователя из комнаты")
     @PostMapping("/kick")
-    public void kickUser(@RequestParam String roomId,
-                         @RequestParam String userId) throws IOException {
+    public ResponseEntity<Void> kickUser(@RequestParam String roomId,
+                                         @RequestParam String userId) throws IOException {
         manager.removeUserFromRoom(roomId, userId);
+
+        broadcaster.broadcast(roomId, "PLAYER_KICKED (" + userId + ")");
+        return ResponseEntity.noContent().build();
     }
 }

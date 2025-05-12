@@ -10,6 +10,7 @@ import org.springframework.web.socket.WebSocketSession;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -92,5 +93,12 @@ public class Room {
         }
         int next = (idx + 1) % players.size();
         players.get(next).setAdmin(true);
+    }
+
+    public Optional<WebSocketSession> getSessionForUser(String userId) {
+        return sessionUserMap.entrySet().stream()
+                .filter(e -> e.getValue().getId().equals(userId))
+                .map(Map.Entry::getKey)
+                .findFirst();
     }
 }

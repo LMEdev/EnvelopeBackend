@@ -141,56 +141,57 @@ public class RoomManagerService {
     }
 
     public void removeUserFromRoom(String roomId, String userId) throws IOException {
-        Room room = getRoom(roomId);
-        Player p = room.getPlayerById(userId);
-        if (p == null) return;
-
-        // 1) close WS session
-        WebSocketSession toClose = room.getSessionUserMap().entrySet().stream()
-                .filter(e -> e.getValue().getId().equals(userId))
-                .map(Map.Entry::getKey).findFirst().orElse(null);
-        if (toClose != null && toClose.isOpen()) {
-            toClose.close(CloseStatus.NORMAL);
-            room.unregisterSession(toClose);
+        Room room = getExistingRoom(roomId);
+        Player toRemove = room.getPlayerById(userId);
+        if (toRemove == null) {
+            return;
         }
 
-        // 2) remove from players
-        room.getPlayers().remove(p);
-        broadcaster.broadcast(roomId, "PLAYER_KICKED (" + p.getName() + ")");
+        // 1) Закрыть WS-сессию (если была)
+        room.getSessionForUser(userId).ifPresent(sess -> {
+            try {
+                sess.close(new CloseStatus(4002, "Kicked by admin"));
+            } catch (IOException ignore) {}
+            room.unregisterSession(sess);
+        });
 
-        // 3) if was admin, rotate
-        if (p.isAdmin() && !room.getPlayers().isEmpty()) {
+        // 2) Убрать из списка игроков
+        room.getPlayers().remove(toRemove);
+        broadcaster.broadcast(roomId, "PLAYER_KICKED (" + toRemove.getName() + ")");
+
+        // 3) Смена админа, если удаляли текущего
+        if (toRemove.isAdmin() && !room.getPlayers().isEmpty()) {
             room.rotateAdmin();
             Player newAdmin = room.getPlayers().stream()
-                    .filter(Player::isAdmin).findFirst().orElse(null);
+                    .filter(Player::isAdmin)
+                    .findFirst().orElse(null);
             if (newAdmin != null) {
                 broadcaster.broadcast(roomId, "ADMIN_CHANGED (" + newAdmin.getName() + ")");
-                WebSocketSession adminSess = room.getSessionUserMap().entrySet().stream()
-                        .filter(e -> e.getValue().getId().equals(newAdmin.getId()))
-                        .map(Map.Entry::getKey).findFirst().orElse(null);
-                if (adminSess != null && adminSess.isOpen()) {
-                    adminSess.sendMessage(new TextMessage("[SYSTEM]: Вы — новый администратор"));
-                }
+                room.getSessionForUser(newAdmin.getId()).ifPresent(adminSess -> {
+                    try {
+                        adminSess.sendMessage(new TextMessage("[SYSTEM]: Вы — новый администратор"));
+                    } catch (IOException ignore) {}
+                });
             }
         }
 
-        // 4) if waiting for answers and now answers == players, finish round
+        // 4) Если мы в фазе ответов и после кика размер ответов == игроков — завершаем раунд
         if (room.getStatus() == RoomStatus.WAITING_FOR_PLAYER_MESSAGE_AFTER_PROMPT
                 && room.getAnswers().size() == room.getPlayers().size()) {
+
             evaluateAnswersWithGpt(roomId);
-            broadcaster.broadcast(roomId, "ANSWERS_EVALUATED");
-            // ... broadcast [RESULT] and [ALL_STATS] as in WS handler ...
+            // здесь можно разослать [RESULT] и [ALL_STATS] через broadcaster или WS-хендлер
         }
 
-        // 5) if empty, delete room
+        // 5) Если комната пуста — удаляем
         if (room.getPlayers().isEmpty()) {
             closeGame(roomId);
             broadcaster.broadcast(roomId, "ROOM_DELETED");
             return;
         }
 
-        // 6) save update
-        updateRoom(room);
+        // 6) Сохраняем изменения
+        cache.save(room);
     }
 
     public void updateRoom(Room room) {
@@ -237,6 +238,11 @@ public class RoomManagerService {
         Room room = Optional.ofNullable(rooms.get(roomId))
                 .orElseThrow(() -> new NoSuchElementException("Комната не найдена"));
         return room.getCurrentPrompt();
+    }
+
+    private Room getExistingRoom(String roomId) {
+        return Optional.ofNullable(rooms.get(roomId))
+                .orElseThrow(() -> new NoSuchElementException("Комната не найдена: " + roomId));
     }
 }
 
