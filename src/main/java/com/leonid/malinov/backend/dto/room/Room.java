@@ -74,8 +74,10 @@ public class Room {
 
         roundResults.put(userId, r);
 
+        boolean survived = "Выжил".equalsIgnoreCase(r.getResult());
+
         stats.computeIfAbsent(userId, k -> new PlayerStats())
-                .record("выжил".equals(r.getResult()));
+                .record(survived);
     }
 
     public void rotateAdmin() {
